@@ -1,10 +1,18 @@
 const AppError = require('../../utils/appError')
 const Volume = require('../../models/volume')
 const {deleteCoverImage} = require('./utils')
+const {withArticleCounts} = require('../../utils/volumes')
+
+const optionalPositiveInt = (value, label) => {
+    if (value === undefined || value === null || value === '') return undefined
+    const parsed = parseInt(value, 10)
+    if (isNaN(parsed) || parsed < 1) throw new AppError(`${label} is not a valid number`, 400)
+    return parsed
+}
 
 exports.volumes = async (req, res) => {
     const volumes = await Volume.find({}).sort({volume: 1})
-    res.status(200).json(volumes)
+    res.status(200).json(await withArticleCounts(volumes))
 }
 
 
@@ -23,6 +31,8 @@ exports.createVolume = async (req, res) => {
     const {volume, about, cover, date} = req.body
     const newVolume = new Volume({
         volume, about, cover, date,
+        issue: optionalPositiveInt(req.body.issue, 'Issue'),
+        year: optionalPositiveInt(req.body.year, 'Year'),
     })
 
     const result = await newVolume.save()
@@ -40,6 +50,11 @@ exports.editVolume = async (req, res) => {
     const update = {
         volume, about, cover, date,
     }
+
+    const issue = optionalPositiveInt(req.body.issue, 'Issue')
+    const year = optionalPositiveInt(req.body.year, 'Year')
+    if (issue !== undefined) update.issue = issue
+    if (year !== undefined) update.year = year
 
     if (cover.length === 0) delete update.cover
 
