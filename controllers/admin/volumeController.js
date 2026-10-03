@@ -1,10 +1,20 @@
 const AppError = require('../../utils/appError')
 const Volume = require('../../models/volume')
 const {deleteCoverImage} = require('./utils')
+const {withArticleCounts} = require('../../utils/volumes')
+const {logAction, logError} = require('../../utils/logger')
+
+const optionalPositiveInt = (value, label) => {
+    if (value === undefined || value === null || value === '') return undefined
+    const parsed = parseInt(value, 10)
+    if (isNaN(parsed) || parsed < 1) throw new AppError(`${label} is not a valid number`, 400)
+    return parsed
+}
 
 exports.volumes = async (req, res) => {
     const volumes = await Volume.find({}).sort({volume: 1})
-    res.status(200).json(volumes)
+    logAction('VOLUME READ list', {count: volumes.length})
+    res.status(200).json(await withArticleCounts(volumes))
 }
 
 
@@ -16,6 +26,7 @@ exports.getVolume = async (req, res) => {
     }
 
     const result = await Volume.find({'volume': volume})
+    logAction('VOLUME READ', {volume, found: result.length})
     res.status(200).json(result)
 }
 
@@ -23,12 +34,18 @@ exports.createVolume = async (req, res) => {
     const {volume, about, cover, date} = req.body
     const newVolume = new Volume({
         volume, about, cover, date,
+        issue: optionalPositiveInt(req.body.issue, 'Issue'),
+        year: optionalPositiveInt(req.body.year, 'Year'),
     })
 
     const result = await newVolume.save()
 
-    if (!result) throw new AppError('Could not create volume ' + volume, 400)
+    if (!result) {
+        logError('VOLUME CREATE', 'Could not create volume', {volume})
+        throw new AppError('Could not create volume ' + volume, 400)
+    }
 
+    logAction('VOLUME CREATE', {id: result._id, volume: result.volume, year: result.year, issue: result.issue})
     res.status(201).json({status: 'success'})
 }
 
@@ -41,14 +58,23 @@ exports.editVolume = async (req, res) => {
         volume, about, cover, date,
     }
 
+    const issue = optionalPositiveInt(req.body.issue, 'Issue')
+    const year = optionalPositiveInt(req.body.year, 'Year')
+    if (issue !== undefined) update.issue = issue
+    if (year !== undefined) update.year = year
+
     if (cover.length === 0) delete update.cover
 
     const result = await Volume.findOneAndUpdate(filter, update, {
         returnOriginal: false
     })
 
-    if (!result) throw new AppError('Could not edit volume ' + volume, 400)
+    if (!result) {
+        logError('VOLUME UPDATE', 'Volume not found', {id, volume})
+        throw new AppError('Could not edit volume ' + volume, 400)
+    }
 
+    logAction('VOLUME UPDATE', {id, volume, year: result.year, issue: result.issue})
     res.status(201).json({status: 'success'})
 }
 
@@ -65,7 +91,11 @@ exports.deleteVolume = async (req, res, next) => {
     // * After deleting the cover image, volume can be safely deleted.
     const result = await Volume.deleteOne({'volume': volume})
 
-    if (!result) throw new AppError('Could not delete Volume', 400)
+    if (!result || result.deletedCount === 0) {
+        logError('VOLUME DELETE', 'Volume not found', {volume})
+        throw new AppError('Could not delete Volume', 400)
+    }
 
+    logAction('VOLUME DELETE', {volume, imageName})
     res.status(204).json({status: 'success'})
 }

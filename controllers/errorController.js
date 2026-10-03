@@ -58,7 +58,9 @@ module.exports = (err, req, res, next) => {
   }
 
   if (process.env.NODE_ENV === 'prod') {
-    let error = { ...err }
+    // Do not spread Error: name/message are non-enumerable and the client
+    // would only get {"status":"fail"} for login and auth failures.
+    let error = err
 
     if (error.name === 'CastError')
       error = handleCastErrorDB(error)

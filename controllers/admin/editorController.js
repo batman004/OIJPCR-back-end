@@ -3,6 +3,7 @@ const path = require('path')
 const Journal = require('../../models/journal')
 const AppError = require('../../utils/appError')
 const {deleteCoverImage} = require('./utils')
+const {logAction, logError} = require('../../utils/logger')
 const {multerImageUpload} = require('../ImageUpload/ArticleCoverImage')
 const {multerPDFUpload} = require('../PDFUpload/PDF')
 
@@ -12,6 +13,7 @@ exports.uploadPDF = multerPDFUpload
 exports.getJournals = async (req, res) => {
     const journals = await Journal.find()
     if (!journals) throw new AppError('Could not load articles', 500)
+    logAction('ARTICLE READ list', {count: journals.length})
     res.json(journals)
 }
 
@@ -23,8 +25,12 @@ exports.getImageFile = async (req, res) => {
     const imagePath = path.dirname(require.main.filename) + '/public/img/' + name
     const imageSource = path.join(imagePath)
     //  * read image
-    const data = await fs.readFile(imageSource)
-    if (!data) throw new AppError('Could not load image', 400)
+    let data
+    try {
+        data = await fs.readFile(imageSource)
+    } catch (err) {
+        throw new AppError('Could not load image', 404)
+    }
     // * send image using correct headers
     res.writeHead(200, {'Content-Type': 'image/jpeg'})
     res.end(data)
@@ -33,6 +39,11 @@ exports.getImageFile = async (req, res) => {
 // * return image URL to client, stored in MongoDB.
 exports.uploadFile = (req, res) => {
     const aliasLocationURL = `https://${req.file.location.split("https://s3.ap-south-1.amazonaws.com/")[1]}`
+    logAction('FILE CREATE', {
+        field: req.file.fieldname,
+        key: req.file.key,
+        url: aliasLocationURL,
+    })
     res.send({
         msg: 'File Uploaded Successfully',
         file: {
@@ -50,8 +61,12 @@ exports.saveArticle = async (req, res) => {
 
     const result = await newArticle.save()
 
-    if (!result) throw new AppError('Could not create Article', 400)
+    if (!result) {
+        logError('ARTICLE CREATE', 'Could not create Article', {title, volume})
+        throw new AppError('Could not create Article', 400)
+    }
 
+    logAction('ARTICLE CREATE', {id: result._id, title: result.title, volume: result.volume, author: result.author})
     res.status(201).send({status: 'success'})
 }
 
@@ -65,29 +80,43 @@ exports.editArticle = async (req, res) => {
 
     const result = await Journal.findByIdAndUpdate(id, {...modifiedArticle})
 
-    if (!result) throw new AppError('Could not update Article', 400)
+    if (!result) {
+        logError('ARTICLE UPDATE', 'Article not found', {id, title})
+        throw new AppError('Could not update Article', 400)
+    }
 
+    logAction('ARTICLE UPDATE', {id, title, volume, author})
     res.status(201).send({status: 'success'})
 }
 
-exports.deleteArticle = async (req, res, next) => {
-    const {id, articleCover, authorPhoto} = req.body
-    // * deleting the fallback image is not a good idea.
-    // * all articles use this image as a fallback
-    if (articleCover !== 'article_cover_fallback') await deleteCoverImage(articleCover, next)
-    // * there is no fallback author photo in images
-    // * author photo can be safely deleted now
-    await deleteCoverImage(authorPhoto, next)
-    // * After deleting the cover image, article can be safely deleted.
+exports.deleteArticle = async (req, res) => {
+    const {id, articleCover, authorPhoto, pdf} = req.body
+    const existing = await Journal.findById(id)
+    if (!existing) {
+        logError('ARTICLE DELETE', 'Article not found', {id})
+        throw new AppError('Could not delete Article', 400)
+    }
+
+    await Promise.all([
+        deleteCoverImage(articleCover),
+        deleteCoverImage(authorPhoto),
+        deleteCoverImage(pdf),
+    ])
+
     const result = await Journal.findByIdAndDelete(id)
 
-    if (!result) throw new AppError('Could not delete Article', 400)
+    if (!result) {
+        logError('ARTICLE DELETE', 'Mongo delete failed', {id, title: existing.title})
+        throw new AppError('Could not delete Article', 400)
+    }
 
+    logAction('ARTICLE DELETE', {id, title: existing.title, volume: existing.volume})
     res.status(201).send({status: 'success'})
 }
 
 exports.deleteFile = async (req, res, next) => {
     const {fileName} = req.params
     await deleteCoverImage(fileName, next)
+    logAction('FILE DELETE', {fileName})
     res.status(204).send({status: 'success'})
 }

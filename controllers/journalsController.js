@@ -1,6 +1,7 @@
 const AppError = require('../utils/appError')
 const Journal = require('../models/journal')
 const Volume = require('../models/volume')
+const {withArticleCounts} = require('../utils/volumes')
 
 /**
  * @constructor
@@ -81,7 +82,7 @@ exports.getJournal = async (req, res) => {
 
 exports.archive = async (req, res) => {
     const archives = await Volume.find({}).sort({volume: 1})
-    res.status(200).json(archives)
+    res.status(200).json(await withArticleCounts(archives))
 }
 
 exports.journalsByTag = async (req, res) => {
