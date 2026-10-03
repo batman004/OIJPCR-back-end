@@ -19,7 +19,13 @@ exports.isLoggedIn = async (req, res, next) => {
     const currentUser = await User.findById(decoded.id)
 
     if (!currentUser) throw new AppError('This token is no longer valid', 401)
+    // res.locals, not req.user: deleteUser checks req.user and must keep behaving as before.
+    res.locals.user = currentUser
     return next()
+}
+
+exports.me = (req, res) => {
+    res.status(200).json({username: res.locals.user.username})
 }
 
 exports.login = async (req, res) => {

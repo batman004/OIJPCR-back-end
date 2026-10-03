@@ -35,6 +35,7 @@ const createSendToken = (user, statusCode, res) => {
   res.status(statusCode).json({
     status: statusCode < 400 ? 'success' : 'error',
     token,
+    username: user.username,
   })
 }
 

@@ -4,6 +4,8 @@ const {
   createFileName,
 } = require('./utils')
 const { s3, s3bucket } = require('../../config/config')
+const AppError = require('../../utils/appError')
+const { logError } = require('../../utils/logger')
 
 const multerStorage = multerS3({
   s3: s3,
@@ -24,7 +26,14 @@ const multerStorage = multerS3({
 const multerFilter = (req, file, cb) => {
   if (file.mimetype.startsWith('image')) {
     cb(null, true)
-  } else cb(new Error('Not an Image'), false)
+  } else {
+    const type = file.mimetype || 'unknown type'
+    logError('FILE CREATE', 'Not an image', { name: file.originalname, type })
+    cb(new AppError(
+      `"${file.originalname}" is not an image (${type}). Use JPEG, PNG, GIF, or WebP.`,
+      400,
+    ), false)
+  }
 }
 
 const multerImageUpload = multer({

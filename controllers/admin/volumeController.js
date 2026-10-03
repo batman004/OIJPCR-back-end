@@ -2,6 +2,7 @@ const AppError = require('../../utils/appError')
 const Volume = require('../../models/volume')
 const {deleteCoverImage} = require('./utils')
 const {withArticleCounts} = require('../../utils/volumes')
+const {logAction, logError} = require('../../utils/logger')
 
 const optionalPositiveInt = (value, label) => {
     if (value === undefined || value === null || value === '') return undefined
@@ -12,6 +13,7 @@ const optionalPositiveInt = (value, label) => {
 
 exports.volumes = async (req, res) => {
     const volumes = await Volume.find({}).sort({volume: 1})
+    logAction('VOLUME READ list', {count: volumes.length})
     res.status(200).json(await withArticleCounts(volumes))
 }
 
@@ -24,6 +26,7 @@ exports.getVolume = async (req, res) => {
     }
 
     const result = await Volume.find({'volume': volume})
+    logAction('VOLUME READ', {volume, found: result.length})
     res.status(200).json(result)
 }
 
@@ -37,8 +40,12 @@ exports.createVolume = async (req, res) => {
 
     const result = await newVolume.save()
 
-    if (!result) throw new AppError('Could not create volume ' + volume, 400)
+    if (!result) {
+        logError('VOLUME CREATE', 'Could not create volume', {volume})
+        throw new AppError('Could not create volume ' + volume, 400)
+    }
 
+    logAction('VOLUME CREATE', {id: result._id, volume: result.volume, year: result.year, issue: result.issue})
     res.status(201).json({status: 'success'})
 }
 
@@ -62,8 +69,12 @@ exports.editVolume = async (req, res) => {
         returnOriginal: false
     })
 
-    if (!result) throw new AppError('Could not edit volume ' + volume, 400)
+    if (!result) {
+        logError('VOLUME UPDATE', 'Volume not found', {id, volume})
+        throw new AppError('Could not edit volume ' + volume, 400)
+    }
 
+    logAction('VOLUME UPDATE', {id, volume, year: result.year, issue: result.issue})
     res.status(201).json({status: 'success'})
 }
 
@@ -80,7 +91,11 @@ exports.deleteVolume = async (req, res, next) => {
     // * After deleting the cover image, volume can be safely deleted.
     const result = await Volume.deleteOne({'volume': volume})
 
-    if (!result) throw new AppError('Could not delete Volume', 400)
+    if (!result || result.deletedCount === 0) {
+        logError('VOLUME DELETE', 'Volume not found', {volume})
+        throw new AppError('Could not delete Volume', 400)
+    }
 
+    logAction('VOLUME DELETE', {volume, imageName})
     res.status(204).json({status: 'success'})
 }
