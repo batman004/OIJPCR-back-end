@@ -1,3 +1,6 @@
+const path = require('path')
+require('dotenv').config({ path: path.join(__dirname, '.env') })
+
 const express = require('express')
 require('express-async-errors')
 
@@ -9,7 +12,6 @@ const morgan = require('morgan')
 const method_override = require('method-override')
 const rateLimit = require('express-rate-limit')
 const helmet = require('helmet')
-const path = require('path')
 const cookieParser = require('cookie-parser')
 const AppError = require('./utils/appError')
 const globalErrorHandler = require('./controllers/errorController')
@@ -19,7 +21,6 @@ const adminRoute = require('./routes/admin')
 const editorRoute = require('./routes/editor')
 const volumeRoute = require('./routes/volume')
 const unhandledExceptionListener = require('./utils/unhandledExceptionListener')
-require('dotenv').config({ path: path.join(__dirname, '/.env') });
 
 process.on('uncaughtException', err => {
     unhandledExceptionListener('UNHANDLED EXCEPTION', err)
@@ -39,9 +40,16 @@ if (process.env.NODE_ENV === 'dev') {
 }
 
 
+function allowedOrigins() {
+    return String(whitelist || '')
+        .split(',')
+        .map(origin => origin.trim())
+        .filter(Boolean)
+}
+
 const corsOptions = {
     origin: function (origin, callback) {
-        if (whitelist.indexOf(origin) !== -1 || !origin) {
+        if (!origin || allowedOrigins().includes(origin)) {
             return callback(null, true)
         }
         callback(new AppError("Blocked by CORS", 403))
@@ -85,7 +93,10 @@ mongoose.connect(mongoConnectionString, mongoOptions)
 
 
 app.use(function (req, res, next) {
-    res.setHeader('Access-Control-Allow-Origin', whitelist);
+    const origin = req.headers.origin
+    if (origin && allowedOrigins().includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin)
+    }
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, X-PINGOTHER,Content-Type, Accept, Authorization');
     next();
