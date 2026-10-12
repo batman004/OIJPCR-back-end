@@ -20,6 +20,7 @@ const journalsRoute = require('./routes/journals')
 const adminRoute = require('./routes/admin')
 const editorRoute = require('./routes/editor')
 const volumeRoute = require('./routes/volume')
+const submissionRoute = require('./routes/submissions')
 const unhandledExceptionListener = require('./utils/unhandledExceptionListener')
 
 process.on('uncaughtException', err => {
@@ -104,6 +105,7 @@ app.use(function (req, res, next) {
 
 
 app.use('/journals', journalsRoute)
+app.use('/submissions', submissionRoute)
 app.use('/admin', adminRoute)
 app.use('/volume', volumeRoute)
 app.use('/editor', editorRoute)

@@ -3,10 +3,12 @@ const router = express.Router({ mergeParams: true })
 const authController = require('../controllers/auth/authController')
 const volumeRoute = require('./Admin/volume')
 const editorRoute = require('./Admin/editor')
+const submissionRoute = require('./Admin/submissions')
 const metricsController = require('../controllers/metricsController')
 
 router.use('/volume', authController.isLoggedIn, volumeRoute)
 router.use('/editor', authController.isLoggedIn, editorRoute)
+router.use('/submissions', authController.isLoggedIn, submissionRoute)
 
 router.get('/me', authController.isLoggedIn, authController.me)
 router.get('/metrics', authController.isLoggedIn, metricsController.dashboard)

@@ -99,9 +99,12 @@ exports.dashboard = async (req, res) => {
   const priorWeek = shiftDay(today, -13)
   const priorWeekEnd = shiftDay(today, -7)
 
-  // `content` is large and not needed here.
+  // `content` is large and not needed here. Drafts (e.g. from an accepted
+  // submission) have no real traffic yet and would just be zero-view noise
+  // in a dashboard about how published content performs; the admin's "All
+  // Articles" list and the Submissions page are where drafts are managed.
   const journals = await Journal
-    .find({})
+    .find(Journal.PUBLIC_ONLY)
     .select('title author volume tags createdAt pdf')
     .sort({createdAt: -1})
     .lean()
