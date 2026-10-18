@@ -6,6 +6,7 @@ const {deleteCoverImage} = require('./utils')
 const {logAction, logError} = require('../../utils/logger')
 const {multerImageUpload} = require('../ImageUpload/ArticleCoverImage')
 const {multerPDFUpload} = require('../PDFUpload/PDF')
+const {generateAndAttachPdf} = require('./articlePdf')
 
 exports.uploadImage = multerImageUpload
 exports.uploadPDF = multerPDFUpload
@@ -15,6 +16,17 @@ exports.getJournals = async (req, res) => {
     if (!journals) throw new AppError('Could not load articles', 500)
     logAction('ARTICLE READ list', {count: journals.length})
     res.json(journals)
+}
+
+// Admin-only: fetches an article by id regardless of status, unlike the public
+// GET /journals/:id, which hides drafts. Used by the edit screen so a draft
+// (e.g. one created from an accepted submission) can be opened and previewed
+// without ever being reachable through the public site.
+exports.getJournalById = async (req, res) => {
+    const {id} = req.params
+    const journal = await Journal.findById(id)
+    if (!journal) throw new AppError(`Found no journal with ID ${id}`, 404)
+    res.json(journal)
 }
 
 // ! change buffer type
@@ -53,10 +65,10 @@ exports.uploadFile = (req, res) => {
 }
 
 exports.saveArticle = async (req, res) => {
-    const {author, title, content, slug, volume, cover, tags, authorPhoto, pdfFilePath} = req.body
+    const {author, title, content, slug, volume, cover, tags, authorPhoto, pdfFilePath, status} = req.body
 
     const newArticle = new Journal({
-        author, title, content, slug, volume, cover, tags, authorPhoto, pdf: pdfFilePath
+        author, title, content, slug, volume, cover, tags, authorPhoto, pdf: pdfFilePath, status
     })
 
     const result = await newArticle.save()
@@ -66,17 +78,23 @@ exports.saveArticle = async (req, res) => {
         throw new AppError('Could not create Article', 400)
     }
 
-    logAction('ARTICLE CREATE', {id: result._id, title: result.title, volume: result.volume, author: result.author})
+    logAction('ARTICLE CREATE', {id: result._id, title: result.title, volume: result.volume, author: result.author, status: result.status})
     res.status(201).send({status: 'success'})
 }
 
 exports.editArticle = async (req, res) => {
     const {id} = req.body
     const {
-        author, title, content, slug, volume, cover, tags, authorPhoto, pdfFilePath
+        author, title, content, slug, volume, cover, tags, authorPhoto, pdfFilePath, status
     } = req.body
 
+    // `status` is only included when the field is present in the request, so an
+    // older client that doesn't send it can't accidentally flip a draft live.
     const modifiedArticle = {author, title, content, slug, volume, cover, tags, authorPhoto, pdf: pdfFilePath}
+    if (status !== undefined) modifiedArticle.status = status
+    // The editor replaces a manuscript image that could not be shown (see
+    // SourceImages in the front end), so the list is saved as sent.
+    if (Array.isArray(req.body.sourceImages)) modifiedArticle.sourceImages = req.body.sourceImages
 
     const result = await Journal.findByIdAndUpdate(id, {...modifiedArticle})
 
@@ -85,7 +103,7 @@ exports.editArticle = async (req, res) => {
         throw new AppError('Could not update Article', 400)
     }
 
-    logAction('ARTICLE UPDATE', {id, title, volume, author})
+    logAction('ARTICLE UPDATE', {id, title, volume, author, status})
     res.status(201).send({status: 'success'})
 }
 
@@ -119,4 +137,19 @@ exports.deleteFile = async (req, res, next) => {
     await deleteCoverImage(fileName, next)
     logAction('FILE DELETE', {fileName})
     res.status(204).send({status: 'success'})
+}
+
+// Builds a PDF for this article - laid out like the rest of the archive (see
+// utils/manuscript.js) - from its current title/author/content, uploads it,
+// and points the article at it. Callable any time, so an editor can
+// regenerate after changing the content or assigning a volume.
+exports.generatePdf = async (req, res) => {
+    const {id} = req.params
+    const journal = await Journal.findById(id)
+    if (!journal) throw new AppError(`Found no journal with ID ${id}`, 404)
+
+    const url = await generateAndAttachPdf(journal)
+
+    logAction('ARTICLE PDF GENERATE', {id, title: journal.title, volume: journal.volume})
+    res.status(200).json({status: 'success', pdf: url})
 }

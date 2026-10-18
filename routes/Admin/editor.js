@@ -19,5 +19,10 @@ router
 router
     .get('/images/:name', editorController.getImageFile)
 
+// Registered last so they never shadow the literal routes above (e.g. a
+// request for /upload/pdf must still hit the upload handler, not this one).
+router
+    .get('/:id', editorController.getJournalById)
+    .post('/:id/pdf', editorController.generatePdf)
 
 module.exports = router

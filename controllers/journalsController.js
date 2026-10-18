@@ -11,7 +11,7 @@ const {withArticleCounts} = require('../utils/volumes')
  */
 exports.journals = async (request, response) => {
     const journals = await Journal
-        .find({})
+        .find(Journal.PUBLIC_ONLY)
         .select('-content')
         .sort({createdAt: -1})
         .exec()
@@ -42,7 +42,7 @@ exports.journalsByVolume = async (request, response) => {
     }
 
     const journals = await Journal
-        .find({'volume': volume})
+        .find({volume, ...Journal.PUBLIC_ONLY})
         .select(fieldsToRemove)
         .sort({createdAt: -1})
     response.status(200).json(journals)
@@ -62,7 +62,7 @@ exports.getLimitedJournalsByVolume = async (request, response) => {
     }
 
     const journals = await Journal
-        .find({'volume': volume})
+        .find({volume, ...Journal.PUBLIC_ONLY})
         .select('-content')
         .sort({createdAt: -1})
         .limit(numberOfArticles)
@@ -71,7 +71,7 @@ exports.getLimitedJournalsByVolume = async (request, response) => {
 
 exports.getJournal = async (req, res) => {
     const {id} = req.params
-    const journal = await Journal.findById(id)
+    const journal = await Journal.findOne({_id: id, ...Journal.PUBLIC_ONLY})
 
     if (!journal) {
         throw new AppError(`Found no journal with ID ${id}`, 404)
@@ -96,13 +96,14 @@ exports.journalsByTag = async (req, res) => {
         $text: {
             $search: tag,
         },
+        ...Journal.PUBLIC_ONLY,
     }).select('-content')
 
     res.status(200).json(articles)
 }
 
 exports.tags = async (req, res) => {
-    let tags = await Journal.distinct("tags")
+    let tags = await Journal.distinct("tags", Journal.PUBLIC_ONLY)
     // tags = ["tag1, tag2, tag3", "tag4, tag5"]
     tags = tags.map(tag => tag.split(', '))
     // tags is a 2D array
@@ -118,7 +119,7 @@ exports.tags = async (req, res) => {
 
 async function getJournals(limit) {
     return await Journal
-        .find({})
+        .find(Journal.PUBLIC_ONLY)
         .select('-content -authorPhoto')
         .sort({createdAt: -1})
         .limit(limit)

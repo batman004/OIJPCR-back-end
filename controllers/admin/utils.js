@@ -30,4 +30,21 @@ const deleteFile = async (fileName) => {
   }
 }
 
-module.exports = { isDefaultImage, deleteCoverImage: deleteFile }
+// Bucket name doubles as the custom media domain (S3_BUCKET_NAME=media.oijpcr.org),
+// so a key at the bucket root is served at this URL - same shape uploadFile()
+// derives from multerS3's `location`.
+const mediaUrl = (key) => `https://${s3bucket}/${encodeURI(key)}`
+
+const putFile = async (key, body, contentType) => {
+  await s3.putObject({
+    Bucket: s3bucket,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    ACL: 'public-read',
+    CacheControl: 'max-age=604800',
+  }).promise()
+  return mediaUrl(key)
+}
+
+module.exports = { isDefaultImage, deleteCoverImage: deleteFile, mediaUrl, putFile }
