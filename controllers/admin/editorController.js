@@ -29,13 +29,25 @@ exports.getJournalById = async (req, res) => {
     res.json(journal)
 }
 
-// ! change buffer type
-// ! for local testing only
+const IMAGE_CONTENT_TYPES = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+}
+
 exports.getImageFile = async (req, res) => {
-    const {name} = req.params
-    // * calculate path of image in ./public/img
-    const imagePath = path.dirname(require.main.filename) + '/public/img/' + name
-    const imageSource = path.join(imagePath)
+    // * only serve image files that live directly inside ./public/img. Express
+    // * decodes %2F in params, so the raw name must never reach the filesystem.
+    const imageDir = path.resolve(path.dirname(require.main.filename), 'public', 'img')
+    const name = path.basename(String(req.params.name || ''))
+    const contentType = IMAGE_CONTENT_TYPES[path.extname(name).toLowerCase()]
+    const imageSource = path.resolve(imageDir, name)
+
+    if (!contentType || path.dirname(imageSource) !== imageDir) {
+        throw new AppError('Could not load image', 404)
+    }
     //  * read image
     let data
     try {
@@ -44,7 +56,7 @@ exports.getImageFile = async (req, res) => {
         throw new AppError('Could not load image', 404)
     }
     // * send image using correct headers
-    res.writeHead(200, {'Content-Type': 'image/jpeg'})
+    res.writeHead(200, {'Content-Type': contentType})
     res.end(data)
 }
 

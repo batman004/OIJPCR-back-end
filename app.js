@@ -5,6 +5,9 @@ const express = require('express')
 require('express-async-errors')
 
 const app = express().disable('x-powered-by')
+// Behind one nginx hop: use X-Forwarded-For so req.ip (and the rate limiters)
+// see the real client instead of the proxy.
+app.set('trust proxy', 1)
 
 const cors = require('cors')
 const mongoose = require('mongoose')
