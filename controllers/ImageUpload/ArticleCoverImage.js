@@ -22,9 +22,11 @@ const multerStorage = multerS3({
   },
 })
 
-// ** filter -> allow files with mimeType: image/* to pass through
+// ** filter -> allow only raster images. SVG is an image/* type too, but it can
+// ** carry script and the media bucket serves it as a document, so it stays out.
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 const multerFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image')) {
+  if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
     cb(null, true)
   } else {
     const type = file.mimetype || 'unknown type'

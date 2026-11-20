@@ -78,6 +78,12 @@ async function extractDocx(buffer, title, saveImage) {
         const name = `Image ${imageCount}`
         const contentType = image.contentType || 'application/octet-stream'
 
+        // SVG can carry script, and these files are served publicly: never store it.
+        if (contentType === 'image/svg+xml') {
+            droppedImages++
+            return {src: PENDING_SRC}
+        }
+
         let url = null
         try {
             url = await saveImage(await image.readAsBuffer(), contentType)
@@ -96,7 +102,7 @@ async function extractDocx(buffer, title, saveImage) {
 
     try {
         const {value} = await mammoth.convertToHtml({buffer}, {convertImage})
-        const html = value
+        const html = stripUnsafeLinks(value)
             .replace(new RegExp(`<img\\b[^>]*\\ssrc="${PENDING_SRC}"[^>]*>`, 'g'), '')
             .replace(/<p>\s*<\/p>/g, '')
         if (html.trim()) {
@@ -111,6 +117,20 @@ async function extractDocx(buffer, title, saveImage) {
         sourceImages,
         droppedImages,
     }
+}
+
+// A .docx can hold a link to any URL, including `javascript:`, and mammoth copies it
+// into the HTML as is. That HTML ends up on the public article page, so only web,
+// mail and in-page links keep their href; any other link keeps its text only.
+const SAFE_HREF = /^(https?:|mailto:|#)/i
+function stripUnsafeLinks(html) {
+    return html.replace(/<a\b([^>]*)>/gi, (tag, attributes) => {
+        const href = /\shref="([^"]*)"/i.exec(attributes)
+        if (!href) return tag
+        // Browsers ignore whitespace and control characters inside a URL scheme.
+        const target = decodeAttribute(href[1]).replace(/[\u0000- ]/g, '')
+        return SAFE_HREF.test(target) ? tag : `<a${attributes.replace(href[0], '')}>`
+    })
 }
 
 // Removes a leading <h1-6>/<p> block if its text matches the title.

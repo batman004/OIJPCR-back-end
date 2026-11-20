@@ -14,7 +14,7 @@ exports.isLoggedIn = async (req, res, next) => {
 
     if (!token) throw new AppError('Please log in to access this resource', 401)
 
-    const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET)
+    const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET, {algorithms: ['HS256']})
 
     const currentUser = await User.findById(decoded.id)
 
@@ -31,7 +31,10 @@ exports.me = (req, res) => {
 exports.login = async (req, res) => {
     const {username, password} = req.body
 
-    if (!(username && password)) throw new AppError('Please provide username and password', 400)
+    // Strings only: an object like {"$ne": null} would become a Mongo query operator.
+    if (typeof username !== 'string' || typeof password !== 'string' || !(username && password)) {
+        throw new AppError('Please provide username and password', 400)
+    }
 
     const user = await User.findOne({username}).select('+password')
 
